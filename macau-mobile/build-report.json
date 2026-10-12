@@ -1,0 +1,12 @@
+{
+  "date": "2026-10-12",
+  "roads": 13516,
+  "buildings": 12081,
+  "pois": 20,
+  "routes": 31,
+  "needed_routes": 31,
+  "missing_routes": [],
+  "routing_errors": [],
+  "assets": 33,
+  "bytes": 6243003
+}

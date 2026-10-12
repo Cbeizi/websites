@@ -1,0 +1,4 @@
+Map data: OpenStreetMap contributors / Geofabrik, ODbL 1.0. https://www.openstreetmap.org/copyright
+Coastline reference: https://github.com/ngsiolei/macau-map-data
+Route snapshots: FOSSGIS OSRM, https://routing.openstreetmap.de/about.html
+Illustrations: user conversation generated artwork, not photographs.
