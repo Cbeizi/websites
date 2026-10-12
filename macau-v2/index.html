@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f7f8f4"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="澳门随行"><meta name="description" content="从口岸到酒店，从酒店再出发。澳门两天一晚的手机离线随行地图。"><title>澳门随行 2.0 · 从口岸到下一站</title><link rel="manifest" href="./manifest.json"><link rel="icon" href="./icon.svg"><link rel="apple-touch-icon" href="./icon-192.png"><link rel="stylesheet" href="./style.css"></head>
+<body>
+<header class="app-header"><button class="wordmark" data-page="map" aria-label="返回随行地图"><span class="brand-mark">澳</span><span><strong>澳门随行<span class="brand-point">.</span></strong><small>两天一晚，你的随行手册</small></span></button><button id="offlineStatus" class="status" aria-label="查看离线状态"><i></i><span>正在保存</span></button></header>
+<main>
+<section id="mapPage" class="page map-page">
+ <div id="map" tabindex="0" role="application" aria-label="澳门街道地图，单指拖动，双指缩放"><canvas id="base"></canvas><canvas id="route"></canvas><div id="markers"></div></div>
+ <div class="map-header"><div class="day-tabs" role="tablist" aria-label="选择天数"><button role="tab" data-day="1" aria-selected="true"><span>01</span> 澳门半岛</button><button role="tab" data-day="2" aria-selected="false"><span>02</span> 氹仔 · 路环</button></div><button id="wholeDay" class="square" aria-label="切换整天路线" title="切换整天路线"></button></div>
+ <div class="map-mode"><span id="viewBadge">当前路段</span><span id="viewDescription">关闸 → 维多利亚酒店</span></div>
+ <div class="map-controls"><button id="zoomIn" aria-label="放大地图"></button><button id="zoomOut" aria-label="缩小地图"></button><button id="fit" aria-label="重新聚焦路线"></button><button id="gps" aria-label="查看我的位置"></button></div>
+ <div class="map-meta"><div class="legend"><span><i></i>步行</span><span><i class="dash"></i>乘车参考</span></div><div id="scale">100 m</div></div>
+ <div class="map-credit">© OpenStreetMap · Geofabrik · ODbL <button id="sourcesOpen">来源</button></div>
+ <section id="journeyCard" class="journey-card" aria-live="polite"></section>
+</section>
+<section id="planPage" class="page scroll-page" hidden>
+ <div class="page-intro"><span class="section-label">行程手册</span><h1>每一步，都接得上。</h1><p>口岸到酒店，再从酒店出发。</p></div>
+ <div class="plan-tabs"><button data-day="1">第一天 · 澳门半岛</button><button data-day="2">第二天 · 离岛</button></div>
+ <div id="planOverview" class="plan-overview"></div><div id="nightControls" class="choice-row" hidden><button data-plan="direct">少折返优先</button><button data-plan="night">夜景收尾</button></div>
+ <div class="plan-tools"><span id="planCount"></span><button id="planSettings">出发时间与节奏 <span data-icon="sliders"></span></button></div>
+ <div id="planList" class="timeline"></div><p class="footnote">时间是可调整的规划估算，不含通关排队。不会根据定位自动勾选，也不会跳过酒店。</p>
+</section>
+<section id="spotsPage" class="page scroll-page" hidden>
+ <div class="page-intro"><span class="section-label">口袋收藏</span><h1>把喜欢的澳门，留下来。</h1><p>你的景点与拍照机位，都在这里。图片已内置，断网也能看。</p></div>
+ <label class="search"><span data-icon="search"></span><input id="search" type="search" placeholder="搜索景点、街道或机位" autocomplete="off"></label>
+ <div class="filters"><button data-filter="all" class="active">全部地点</button><button data-filter="camera">拍照机位</button><button data-filter="done">已打卡</button></div><div id="spotsList"></div>
+</section>
+<section id="offlinePage" class="page scroll-page" hidden>
+ <div class="page-intro"><span class="section-label">我的口袋</span><h1>没信号，也有方向。</h1><p>街道、路线和小图在本机。进度由你掌控，不上传个人笔记。</p></div>
+ <div class="offline-card"><span class="offline-symbol" data-icon="download"></span><div><h2 id="offlineTitle">检查离线内容</h2><p id="offlineMessage">首次打开时请保持联网。</p></div><progress id="offlineProgress" max="100" value="0"></progress><p id="cacheDetail" class="footnote"></p><button class="primary" id="cacheBtn">保存 / 检查离线内容</button></div>
+ <div class="hotel-pass"><span class="section-label">今晚落脚</span><h2>维多利亚酒店</h2><p>澳门拱形马路 118 号<br><span>酒店寄存与入住时间，以前台确认为准。</span></p><button id="hotelOpen">打开酒店卡片 <span data-icon="arrow"></span></button></div>
+ <div class="settings-list"><button id="installHelp">添加到手机主屏幕<span data-icon="arrow"></span></button><button id="exportNotes">导出进度与笔记<span data-icon="download"></span></button><button id="importNotes">导入旧版或新版备份<span data-icon="upload"></span></button><button id="resetJourney">重置行程进度<span data-icon="refresh"></span></button><button id="helpOpen">数据来源与使用边界<span data-icon="info"></span></button></div>
+ <p class="footnote">澳门随行 2.0 · 街道快照 2026-10-12<br>路线是沿路参考，不是实时导航。乘车线不是公交线。清理网站数据会清除本机保存内容，请先备份。</p>
+</section>
+</main>
+<nav class="bottom-nav" aria-label="主导航"><button data-page="map" class="active"><span data-icon="map"></span><span>随行</span></button><button data-page="plan"><span data-icon="list"></span><span>行程</span></button><button data-page="spots"><span data-icon="camera"></span><span>机位</span></button><button data-page="offline"><span data-icon="pocket"></span><span>口袋</span></button></nav>
+<div id="sheetBackdrop" class="sheet-backdrop" hidden></div><section id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden><div class="sheet-head"><span class="handle"></span><button id="sheetClose" aria-label="关闭详情"><span data-icon="close"></span></button></div><div id="sheetContent" class="sheet-content"></div><div id="sheetFooter" class="sheet-footer"></div></section>
+<div id="toast" role="status" class="toast"></div><div id="loading" class="loading"><span class="brand-mark">澳</span><h2>下一站，澳门。</h2><p id="loadingText">正在打开你的离线随行手册…</p><button id="loadRetry" hidden>重新载入</button></div><noscript><p style="position:fixed;inset:0;background:#fff;z-index:1000;padding:30px">请用 Safari 打开成品网址，不要在附件预览器中运行 HTML。</p></noscript><script src="./app.js" defer></script>
+</body></html>
