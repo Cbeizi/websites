@@ -1,0 +1,26 @@
+name: Build Macau offline map data
+on:
+  push:
+    branches: [build/macau-offline-data-20261013]
+    paths: [.github/workflows/macau-offline-data.yml]
+permissions:
+  contents: read
+jobs:
+  map-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Download public geographic data
+        run: |
+          mkdir -p map-data
+          curl --fail --location --retry 2 --max-time 120 https://download.geofabrik.de/asia/china/macau-latest.osm.pbf -o map-data/macau.osm.pbf
+          curl --fail --location --retry 2 --max-time 120 https://download.geofabrik.de/asia/china/macau-latest-free.shp.zip -o map-data/macau-shapes.zip
+          curl --fail --location --retry 2 --max-time 60 https://raw.githubusercontent.com/ngsiolei/macau-map-data/master/macau.json -o map-data/macau-outline.json
+          echo 'OpenStreetMap contributors / Geofabrik Macau extract. ODbL 1.0. Outline: ngsiolei/macau-map-data.' > map-data/SOURCE.txt
+          date -u +%Y-%m-%dT%H:%M:%SZ >> map-data/SOURCE.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macau-geodata
+          path: map-data/
+          if-no-files-found: error
+          retention-days: 7
