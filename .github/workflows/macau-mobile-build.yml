@@ -1,0 +1,56 @@
+name: Macau mobile offline app
+on:
+  push:
+    branches: [build/macau-offline-data-20261013]
+    paths: [macau-mobile/**, macau-tools/**, .github/workflows/macau-mobile-build.yml]
+permissions:
+  contents: write
+concurrency:
+  group: macau-mobile-build
+  cancel-in-progress: true
+jobs:
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build and browser test tools
+        run: |
+          python -m pip install requests pyshp Pillow playwright
+          python -m playwright install --with-deps chromium webkit
+      - name: Build complete local map and road routes
+        run: python macau-tools/build.py
+      - name: Verify phone interactions and offline reopening
+        run: python macau-tools/qa.py
+      - name: Publish static files on isolated branch
+        run: |
+          cp -a /tmp/macau-site/. macau-mobile/
+          git config user.name 'Macau app builder'
+          git config user.email 'macau-builder@users.noreply.github.com'
+          git add macau-mobile
+          git diff --cached --quiet || git commit -m 'Bundle verified Macau offline mobile app [skip ci]'
+          git push origin HEAD:build/macau-offline-data-20261013
+          SHA=$(git rev-parse HEAD)
+          URL="https://rawcdn.githack.com/Cbeizi/websites/$SHA/macau-mobile/index.html"
+          echo "MACAU_PUBLIC_URL=$URL" >> "$GITHUB_ENV"
+          echo "{\"url\":\"$URL\",\"commit\":\"$SHA\",\"branch\":\"build/macau-offline-data-20261013\"}" > /tmp/macau-qa/published.json
+          echo "$URL"
+      - name: Verify the actual public URL
+        env:
+          MACAU_TEST_URL: ${{ env.MACAU_PUBLIC_URL }}
+        run: |
+          mkdir -p /tmp/macau-local-qa
+          cp -a /tmp/macau-qa/. /tmp/macau-local-qa/
+          python macau-tools/qa.py
+          cp /tmp/macau-qa/qa-report.json /tmp/macau-qa/public-qa-report.json
+      - name: Package complete app and test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macau-mobile-complete
+          path: |
+            /tmp/macau-site/
+            /tmp/macau-qa/
+            /tmp/macau-local-qa/
+          if-no-files-found: warn
+          retention-days: 14
