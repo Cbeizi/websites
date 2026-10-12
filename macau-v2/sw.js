@@ -1,7 +1,7 @@
 'use strict';
 const BASE=new URL('./',self.location.href).href;
 const PREFIX='macau-pocket-'+new URL(BASE).pathname+'-';
-const CACHE=PREFIX+'v2-20261012174502';
+const CACHE=PREFIX+'v2-20261012175433';
 const FILES=["map.json", "manifest.json", "LICENSE-MAP.txt", "map.js", "index.html", "offline.js", "icon.svg", "icon-512.png", "trip.json", "app.js", "icon-192.png", "style.css", "routes.json", "img/paul.webp", "img/parisian.webp", "img/guia.webp", "img/pier.webp", "img/cheocvan.webp", "img/dominic.webp", "img/october.webp", "img/pequena.webp", "img/londoner.webp", "img/chapel.webp", "img/cunha.webp", "img/lisboa.webp", "img/wynn.webp", "img/lazarus.webp", "img/studio.webp", "img/brandao.webp", "img/port.webp", "img/fisher.webp", "img/library.webp", "img/hotel.webp"];
 let lastError='';
 async function save(){const c=await caches.open(CACHE);lastError='';let i=0;async function task(){while(i<FILES.length){const name=FILES[i++],url=new URL(name,BASE).href;try{if(await c.match(url))continue;const r=await fetch(new Request(url,{cache:'reload',credentials:'same-origin'}));if(!r.ok)throw Error(name+' HTTP '+r.status);await c.put(url,r);}catch(e){lastError=e.message;}}}await Promise.all([task(),task(),task(),task()]);return check();}
