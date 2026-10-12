@@ -20,6 +20,17 @@ jobs:
           python -m playwright install --with-deps chromium webkit
       - name: Build complete local map and road routes
         run: python macau-tools/build.py
+      - name: Keep the install manifest on the app origin
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/macau-site')
+          (p/'manifest.webmanifest').rename(p/'manifest.json')
+          for name in ['index.html','sw.js']:
+              f=p/name
+              f.write_text(f.read_text().replace('manifest.webmanifest','manifest.json'))
+          assert 'href="./manifest.json"' in (p/'index.html').read_text()
+          PY
       - name: Verify phone interactions and offline reopening
         run: python macau-tools/qa.py
       - name: Publish static files on isolated branch
@@ -35,12 +46,24 @@ jobs:
           echo "MACAU_PUBLIC_URL=$URL" >> "$GITHUB_ENV"
           echo "{\"url\":\"$URL\",\"commit\":\"$SHA\",\"branch\":\"build/macau-offline-data-20261013\"}" > /tmp/macau-qa/published.json
           echo "$URL"
-      - name: Verify the actual public URL
+      - name: Verify the actual public URL and install manifest
         env:
           MACAU_TEST_URL: ${{ env.MACAU_PUBLIC_URL }}
         run: |
           mkdir -p /tmp/macau-local-qa
           cp -a /tmp/macau-qa/. /tmp/macau-local-qa/
+          python - <<'PY'
+          import os,json,requests
+          from urllib.parse import urljoin,urlparse
+          url=urljoin(os.environ['MACAU_TEST_URL'],'manifest.json')
+          r=requests.get(url,timeout=60);r.raise_for_status()
+          assert r.url==url,('manifest redirected',r.url)
+          manifest=r.json()
+          launch=urljoin(r.url,manifest['start_url'])
+          assert launch==os.environ['MACAU_TEST_URL'],launch
+          assert manifest['display']=='standalone'
+          open('/tmp/macau-qa/install-check.json','w').write(json.dumps({'manifest_url':r.url,'content_type':r.headers.get('content-type'),'launch_url':launch,'same_origin':True}))
+          PY
           python macau-tools/qa.py
           cp /tmp/macau-qa/qa-report.json /tmp/macau-qa/public-qa-report.json
       - name: Package complete app and test evidence
