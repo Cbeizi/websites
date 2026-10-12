@@ -21,10 +21,11 @@ jobs:
       - name: Bundle offline data and route snapshots
         run: |
           python macau-v2-tools/build.py
+          python macau-v2-tools/refinements.py
           node --check macau-v2/app.js
           node --check macau-v2/map.js
       - name: Verify complete phone journey and offline states
-        run: python macau-v2-tools/qa.py
+        run: python macau-v2-tools/qa-network.py
       - name: Publish verified files to isolated branch
         run: |
           git config user.name 'Macau app builder'
@@ -52,7 +53,7 @@ jobs:
           assert urljoin(target,m['start_url'])==url
           open('/tmp/macau-v2-qa/install.json','w').write(json.dumps({'manifest':target,'start_url':url,'same_origin':True}))
           PY
-          python macau-v2-tools/qa.py
+          python macau-v2-tools/qa-network.py
       - name: Export complete app and verification evidence
         if: always()
         uses: actions/upload-artifact@v7
