@@ -1,0 +1,66 @@
+name: Macau journey 2.0
+on:
+  push:
+    branches: [build/macau-offline-data-20261013]
+    paths: [macau-v2/**, macau-v2-tools/**, .github/workflows/macau-v2.yml]
+permissions:
+  contents: write
+concurrency:
+  group: macau-journey-v2
+  cancel-in-progress: true
+jobs:
+  journey:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install browser verification tools
+        run: |
+          python -m pip install requests playwright
+          python -m playwright install --with-deps chromium webkit
+      - name: Bundle offline data and route snapshots
+        run: |
+          python macau-v2-tools/build.py
+          node --check macau-v2/app.js
+          node --check macau-v2/map.js
+      - name: Verify complete phone journey and offline states
+        run: python macau-v2-tools/qa.py
+      - name: Publish verified files to isolated branch
+        run: |
+          git config user.name 'Macau app builder'
+          git config user.email 'macau-builder@users.noreply.github.com'
+          git add macau-v2
+          git diff --cached --quiet || git commit -m 'Publish verified journey-first Macau app v2 [skip ci]'
+          git push origin HEAD:build/macau-offline-data-20261013
+          SHA=$(git rev-parse HEAD)
+          URL="https://rawcdn.githack.com/Cbeizi/websites/$SHA/macau-v2/index.html"
+          echo "MACAU_PUBLIC_URL=$URL" >> "$GITHUB_ENV"
+          printf '{"url":"%s","commit":"%s"}' "$URL" "$SHA" > /tmp/macau-v2-qa/published.json
+          echo "$URL"
+      - name: Verify actual public app and install address
+        run: |
+          mkdir -p /tmp/macau-v2-local-qa
+          cp -a /tmp/macau-v2-qa/. /tmp/macau-v2-local-qa/
+          python - <<'PY'
+          import os,json,requests
+          from urllib.parse import urljoin
+          url=os.environ['MACAU_PUBLIC_URL']
+          target=urljoin(url,'manifest.json')
+          r=requests.get(target,timeout=60);r.raise_for_status()
+          assert r.url==target,(r.url,target)
+          m=r.json();assert m['display']=='standalone'
+          assert urljoin(target,m['start_url'])==url
+          open('/tmp/macau-v2-qa/install.json','w').write(json.dumps({'manifest':target,'start_url':url,'same_origin':True}))
+          PY
+          python macau-v2-tools/qa.py
+      - name: Export complete app and verification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macau-v2-complete
+          path: |
+            macau-v2/
+            /tmp/macau-v2-qa/
+            /tmp/macau-v2-local-qa/
+          retention-days: 14
+          if-no-files-found: warn
