@@ -1,11 +1,15 @@
 """Run the same journey assertions, using a cuttable TCP proxy for WebKit HTTPS.
-The proxy forwards only to the current public app host. It never decrypts TLS,
-records contents, or reaches user accounts. Cutting connections simulates a
-network outage without WebKit's inspector aborting navigation before its cache.
+The proxy forwards only to the current public app host and never decrypts TLS.
 """
 from pathlib import Path
-import os, socket, socketserver, select, threading
+import os,socket,socketserver,select,threading
 from urllib.parse import urlparse
+from playwright.sync_api import Page
+_original_screenshot=Page.screenshot
+def stable_screenshot(self,*args,**kwargs):
+    self.wait_for_timeout(250)
+    return _original_screenshot(self,*args,**kwargs)
+Page.screenshot=stable_screenshot
 class OutageProxy:
     def __init__(self):
         owner=self;self.off=False;self.connections=set();self.lock=threading.Lock()
@@ -49,8 +53,7 @@ class OutageProxy:
         threading.Thread(target=self.server.serve_forever,daemon=True).start()
     def cut(self):
         self.off=True
-        with self.lock:
-            sockets=list(self.connections)
+        with self.lock:sockets=list(self.connections)
         for sock in sockets:
             try:sock.shutdown(socket.SHUT_RDWR)
             except OSError:pass
@@ -61,6 +64,9 @@ class OutageProxy:
 path=Path(__file__).with_name('qa.py');s=path.read_text()
 a="b=bt.launch();ctx=b.new_context"
 b="tunnel=OutageProxy() if PUBLIC and name=='webkit' else None\n    b=bt.launch(proxy={'server':tunnel.address} if tunnel else None);ctx=b.new_context"
+assert a in s;s=s.replace(a,b)
+a="checks['title']='2.0' in page.title()"
+b="page.wait_for_function(\"document.querySelectorAll('#markers .marker').length>=2\",timeout=20000)\n        "+a
 assert a in s;s=s.replace(a,b)
 a="ctx.route('**/*',lambda route:route.abort());offline_method='origin requests blocked; service-worker cache response asserted'"
 b="tunnel.cut();offline_method='HTTPS TCP proxy severed; new navigation served by service worker'\n            import requests\n            try:\n                requests.get(url,proxies={'https':tunnel.address},timeout=5)\n                raise AssertionError('The outage proxy did not block a fresh network connection')\n            except requests.RequestException:pass"
