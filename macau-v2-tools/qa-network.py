@@ -1,8 +1,10 @@
-"""Run the same journey assertions, using a cuttable TCP proxy for WebKit HTTPS.
-The proxy forwards only to the current public app host and never decrypts TLS.
+"""Run unchanged journey assertions plus a persistent WebKit cold-start test.
+The dedicated CI runner temporarily maps only the public app host to loopback,
+then restores its original hosts file in finally. GitHub and other hosts are
+untouched. No browser inspector request-abort or HTTPS proxy is used.
 """
 from pathlib import Path
-import os,socket,socketserver,select,threading
+import os,socket,tempfile,subprocess
 from urllib.parse import urlparse
 from playwright.sync_api import Page
 _original_screenshot=Page.screenshot
@@ -10,68 +12,48 @@ def stable_screenshot(self,*args,**kwargs):
     self.wait_for_timeout(250)
     return _original_screenshot(self,*args,**kwargs)
 Page.screenshot=stable_screenshot
-class OutageProxy:
-    def __init__(self):
-        owner=self;self.off=False;self.connections=set();self.lock=threading.Lock()
-        allowed=urlparse(os.environ['MACAU_PUBLIC_URL']).hostname
-        class Handler(socketserver.BaseRequestHandler):
-            def handle(self):
-                client=self.request;up=None
-                try:
-                    client.settimeout(15);raw=b''
-                    while b'\r\n\r\n' not in raw:
-                        chunk=client.recv(8192)
-                        if not chunk or len(raw)>65536:return
-                        raw+=chunk
-                    line=raw.split(b'\r\n',1)[0].decode('ascii','ignore').split()
-                    if len(line)<3 or line[0]!='CONNECT' or owner.off:return
-                    host,port=line[1].rsplit(':',1)
-                    if host!=allowed or port!='443':
-                        client.sendall(b'HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n');return
-                    up=socket.create_connection((host,443),timeout=15)
-                    with owner.lock:owner.connections.update([client,up])
-                    client.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
-                    client.settimeout(3);up.settimeout(3)
-                    while not owner.off:
-                        ready,_,_=select.select([client,up],[],[],1)
-                        for src in ready:
-                            data=src.recv(65536)
-                            if not data:return
-                            (up if src is client else client).sendall(data)
-                except (OSError,ValueError):pass
-                finally:
-                    with owner.lock:
-                        owner.connections.discard(client)
-                        if up:owner.connections.discard(up)
-                    if up:
-                        try:up.close()
-                        except OSError:pass
-        class Server(socketserver.ThreadingTCPServer):
-            allow_reuse_address=True;daemon_threads=True
-        self.server=Server(('127.0.0.1',0),Handler)
-        self.address='http://127.0.0.1:'+str(self.server.server_address[1])
-        threading.Thread(target=self.server.serve_forever,daemon=True).start()
+class HostOutage:
+    def __init__(self,url):
+        self.host=urlparse(url).hostname
+        assert self.host=='rawcdn.githack.com'
+        self.original=Path('/etc/hosts').read_bytes();self.active=False
     def cut(self):
-        self.off=True
-        with self.lock:sockets=list(self.connections)
-        for sock in sockets:
-            try:sock.shutdown(socket.SHUT_RDWR)
-            except OSError:pass
-            try:sock.close()
-            except OSError:pass
+        data=self.original+b'\n127.0.0.1 '+self.host.encode()+b'\n::1 '+self.host.encode()+b'\n'
+        subprocess.run(['sudo','tee','/etc/hosts'],input=data,stdout=subprocess.DEVNULL,check=True)
+        self.active=True
+        assert socket.gethostbyname(self.host)=='127.0.0.1'
     def close(self):
-        self.cut();self.server.shutdown();self.server.server_close()
+        if self.active:
+            subprocess.run(['sudo','tee','/etc/hosts'],input=self.original,stdout=subprocess.DEVNULL,check=True)
+            self.active=False
 path=Path(__file__).with_name('qa.py');s=path.read_text()
-a="b=bt.launch();ctx=b.new_context"
-b="tunnel=OutageProxy() if PUBLIC and name=='webkit' else None\n    b=bt.launch(proxy={'server':tunnel.address} if tunnel else None);ctx=b.new_context"
+a="b=bt.launch();ctx=b.new_context(viewport={'width':390,'height':844},device_scale_factor=2,is_mobile=True,has_touch=True)"
+b="""profile=tempfile.mkdtemp(prefix='macau-webkit-') if PUBLIC and name=='webkit' else None
+    outage=HostOutage(url) if profile else None
+    if profile:
+        ctx=bt.launch_persistent_context(profile,viewport={'width':390,'height':844},device_scale_factor=2,is_mobile=True,has_touch=True)
+        b=ctx
+    else:
+        b=bt.launch();ctx=b.new_context(viewport={'width':390,'height':844},device_scale_factor=2,is_mobile=True,has_touch=True)"""
 assert a in s;s=s.replace(a,b)
 a="checks['title']='2.0' in page.title()"
 b="page.wait_for_function(\"document.querySelectorAll('#markers .marker').length>=2\",timeout=20000)\n        "+a
 assert a in s;s=s.replace(a,b)
 a="ctx.route('**/*',lambda route:route.abort());offline_method='origin requests blocked; service-worker cache response asserted'"
-b="tunnel.cut();offline_method='HTTPS TCP proxy severed; new navigation served by service worker'\n            import requests\n            try:\n                requests.get(url,proxies={'https':tunnel.address},timeout=5)\n                raise AssertionError('The outage proxy did not block a fresh network connection')\n            except requests.RequestException:pass"
+b="""ctx.close();outage.cut()
+            import requests
+            probe=requests.Session();probe.trust_env=False
+            try:
+                probe.get(url,timeout=4)
+                raise AssertionError('App host remained reachable during cold-start test')
+            except requests.RequestException:pass
+            ctx=bt.launch_persistent_context(profile,viewport={'width':390,'height':844},device_scale_factor=2,is_mobile=True,has_touch=True)
+            b=ctx;page=ctx.new_page()
+            offline_method='browser process restarted, app DNS mapped to unreachable loopback, service-worker response asserted'"""
 assert a in s;s=s.replace(a,b)
 a='b.close()\n        if server:'
-b='b.close()\n        if tunnel:tunnel.close()\n        if server:'
+b='b.close()\n        if outage:outage.close()\n        if server:'
 assert a in s;s=s.replace(a,b)
-exec(compile(s,str(path),'exec'),{'__name__':'__main__','__file__':str(path),'OutageProxy':OutageProxy})
+# Preserve the precise failure context rather than an empty AssertionError.
+s=s.replace("'error':str(e),'features':checks", "'error':str(e),'traceback':traceback.format_exc(),'offline_message':page.locator('#offlineMessage').inner_text() if page.locator('#offlineMessage').count() else '', 'features':checks")
+exec(compile(s,str(path),'exec'),{'__name__':'__main__','__file__':str(path),'HostOutage':HostOutage,'tempfile':tempfile})
